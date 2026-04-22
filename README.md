@@ -8,13 +8,20 @@
   Run `npm i` to install the dependencies.
 
   Run `npm run dev` to start the development server.
+
+  ## Running with Docker
+
+  Development mode (Vite with hot reload):
+
+  Run `docker compose up --build`
+
+  Open `http://localhost:5173`
+
+  Production build (Nginx):
+
+  Run `docker build --target prod -t queryai-front .`
+
+  Run `docker run --rm -p 8080:80 queryai-front`
+
+  Open `http://localhost:8080`
   
-## Docker run
-
-Run the app with one command:
-
-```bash
-docker compose up --build
-```
-
-Then open http://localhost:8080.

@@ -2,8 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router";
 import { Button } from "./ui/button";
 import { Textarea } from "./ui/textarea";
-import { Card } from "./ui/card";
-import { Sparkles, TrendingUp, Users, DollarSign } from "lucide-react";
+import { Sparkles } from "lucide-react";
 
 const EXAMPLE_QUERIES = [
   "Показать продажи по регионам за последний квартал",
@@ -30,89 +29,57 @@ export function Home() {
   };
 
   return (
-    <div className="max-w-4xl mx-auto">
+    <div className="max-w-3xl mx-auto pt-16 pb-24">
       <div className="text-center mb-12">
-        <h1 className="text-4xl font-bold text-slate-900 mb-4">
-          Аналитика на естественном языке
+        <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-blue-50 text-blue-700 rounded-full text-sm font-medium mb-6">
+          <Sparkles className="w-4 h-4" />
+          Аналитика с AI
+        </div>
+        <h1 className="text-5xl font-bold text-slate-900 mb-4 tracking-tight">
+          Задайте любой вопрос
+          <br />
+          о ваших данных
         </h1>
-        <p className="text-lg text-slate-600">
-          Просто опишите, что вы хотите узнать — мы создадим отчет
+        <p className="text-xl text-slate-600 max-w-2xl mx-auto">
+          Запросы на естественном языке, мгновенные инсайты. Без SQL.
         </p>
       </div>
 
-      <Card className="p-8 mb-8 bg-white shadow-lg">
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">
-              Ваш запрос
-            </label>
-            <Textarea
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Например: Показать продажи по регионам за последний квартал..."
-              className="min-h-32 text-base resize-none"
-            />
-          </div>
-
+      <form onSubmit={handleSubmit} className="mb-12">
+        <div className="relative">
+          <Textarea
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Например: Показать продажи по регионам за последний квартал..."
+            className="min-h-[140px] text-base resize-none pr-24 shadow-sm border-slate-300 focus:border-blue-500 focus:ring-blue-500"
+          />
           <Button
             type="submit"
             size="lg"
-            className="w-full bg-blue-600 hover:bg-blue-700"
+            className="absolute bottom-4 right-4 bg-blue-600 hover:bg-blue-700 shadow-sm"
             disabled={!query.trim()}
           >
-            <Sparkles className="w-5 h-5 mr-2" />
-            Показать результат
+            <Sparkles className="w-4 h-4 mr-2" />
+            Анализировать
           </Button>
-        </form>
-      </Card>
+        </div>
+      </form>
 
-      <div className="mb-8">
-        <h2 className="text-sm font-medium text-slate-700 mb-3">
-          Примеры запросов:
-        </h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+      <div>
+        <p className="text-sm font-medium text-slate-500 mb-3">
+          Попробуйте пример:
+        </p>
+        <div className="flex flex-wrap gap-2">
           {EXAMPLE_QUERIES.map((example, index) => (
-            <Card
+            <button
               key={index}
-              className="p-4 cursor-pointer hover:bg-blue-50 hover:border-blue-200 transition-colors"
               onClick={() => handleExampleClick(example)}
+              className="px-4 py-2 bg-white border border-slate-200 rounded-lg text-sm text-slate-700 hover:border-blue-300 hover:bg-blue-50 transition-colors text-left"
             >
-              <p className="text-sm text-slate-700">{example}</p>
-            </Card>
+              {example}
+            </button>
           ))}
         </div>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <Card className="p-6 text-center">
-          <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center mx-auto mb-3">
-            <TrendingUp className="w-6 h-6 text-blue-600" />
-          </div>
-          <h3 className="font-semibold text-slate-900 mb-2">Быстрые отчеты</h3>
-          <p className="text-sm text-slate-600">
-            Получайте данные без написания SQL
-          </p>
-        </Card>
-
-        <Card className="p-6 text-center">
-          <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center mx-auto mb-3">
-            <Users className="w-6 h-6 text-green-600" />
-          </div>
-          <h3 className="font-semibold text-slate-900 mb-2">Понятные графики</h3>
-          <p className="text-sm text-slate-600">
-            Визуализация данных в один клик
-          </p>
-        </Card>
-
-        <Card className="p-6 text-center">
-          <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center mx-auto mb-3">
-            <DollarSign className="w-6 h-6 text-purple-600" />
-          </div>
-          <h3 className="font-semibold text-slate-900 mb-2">Сохранение</h3>
-          <p className="text-sm text-slate-600">
-            Создавайте библиотеку отчетов
-          </p>
-        </Card>
       </div>
     </div>
   );

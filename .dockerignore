@@ -1,9 +1,10 @@
-.git
-.gitignore
 node_modules
 dist
+.git
+.gitignore
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
-guidelines
+Dockerfile*
+docker-compose*.yml

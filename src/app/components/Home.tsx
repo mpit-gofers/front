@@ -5,7 +5,6 @@ import { Button } from "./ui/button";
 import { Card } from "./ui/card";
 import { PRESET_QUESTION_GROUPS, type PreparedQuestion } from "../store";
 import { Textarea } from "./ui/textarea";
-import { PilotKpiPanel } from "./PilotKpiPanel";
 
 function getGroupHeading(role: PreparedQuestion["role"]): string {
   switch (role) {
@@ -90,8 +89,6 @@ export function Home() {
           Ответы остаются проверяемыми: с trust-контуром, SQL и следующими шагами.
         </p>
       </div>
-
-      <PilotKpiPanel />
 
       <Card className="mb-10 border-slate-200 p-6 shadow-sm">
         <form onSubmit={handleSubmit}>

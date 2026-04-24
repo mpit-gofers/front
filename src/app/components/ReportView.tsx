@@ -2,11 +2,9 @@ import { useState } from "react";
 import { useParams, useNavigate } from "react-router";
 import { Card } from "./ui/card";
 import { Button } from "./ui/button";
-import { Badge } from "./ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table";
-import { Alert, AlertDescription } from "./ui/alert";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "./ui/collapsible";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import { QueryVisualization } from "./QueryVisualization";
 import {
   ArrowLeft,
   Play,
@@ -27,6 +25,9 @@ export function ReportView() {
 
   const report = store.getReport(reportId!);
   const query = report ? store.getQuery(report.queryId) : null;
+  const tableColumns =
+    query?.result?.columns ??
+    Object.keys((query?.result?.table?.[0] as Record<string, unknown> | undefined) ?? {});
 
   if (!report || !query) {
     return (
@@ -46,8 +47,8 @@ export function ReportView() {
     );
   }
 
-  const handleRerun = () => {
-    const newQuery = store.rerunReport(reportId!);
+  const handleRerun = async () => {
+    const newQuery = await store.rerunReport(reportId!);
     if (newQuery) {
       navigate(`/result/${newQuery.id}`);
     }
@@ -97,47 +98,66 @@ export function ReportView() {
         </div>
       </Card>
 
-      {query.interpretation && (
-        <div className="grid grid-cols-4 gap-4 mb-8">
-          <Card className="p-4 border-slate-200">
-            <p className="text-xs font-medium text-slate-500 mb-1">Интерпретация</p>
-            <p className="text-sm font-medium text-slate-900">{query.interpretation.understood}</p>
-          </Card>
-          <Card className="p-4 border-slate-200">
-            <p className="text-xs font-medium text-slate-500 mb-1">Метрики</p>
-            <p className="text-sm font-medium text-slate-900">{query.interpretation.metrics.join(', ')}</p>
-          </Card>
-          <Card className="p-4 border-slate-200">
-            <p className="text-xs font-medium text-slate-500 mb-1">Период</p>
-            <p className="text-sm font-medium text-slate-900">{query.interpretation.period}</p>
-          </Card>
-          <Card className="p-4 border-slate-200">
-            <p className="text-xs font-medium text-slate-500 mb-1">Разбивка</p>
-            <p className="text-sm font-medium text-slate-900">{query.interpretation.breakdown}</p>
-          </Card>
-        </div>
+      {query.refinementTrace && query.refinementTrace.length > 0 && (
+        <Card className="p-6 mb-8 border-slate-200">
+          <h2 className="text-lg font-semibold text-slate-900 mb-4">Цепочка уточнений</h2>
+          <div className="space-y-3">
+            {query.refinementTrace.map((step, index) => (
+              <div
+                key={`${step.selected_value}-${index}`}
+                className="rounded-xl border border-slate-200 bg-slate-50 p-4"
+              >
+                <p className="text-sm font-medium text-slate-700">{step.question}</p>
+                <p className="mt-1 text-sm text-slate-900">
+                  Выбрано: <span className="font-semibold">{step.selected_label}</span>
+                </p>
+              </div>
+            ))}
+          </div>
+        </Card>
       )}
+
+      <div className="grid grid-cols-4 gap-4 mb-8">
+        <Card className="p-4 border-slate-200">
+          <p className="text-xs font-medium text-slate-500 mb-1">Строк</p>
+          <p className="text-sm font-medium text-slate-900">{query.result?.rowCount ?? 0}</p>
+        </Card>
+        <Card className="p-4 border-slate-200">
+          <p className="text-xs font-medium text-slate-500 mb-1">Колонки</p>
+          <p className="text-sm font-medium text-slate-900">{tableColumns.length}</p>
+        </Card>
+        <Card className="p-4 border-slate-200">
+          <p className="text-xs font-medium text-slate-500 mb-1">Оценка стоимости</p>
+          <p className="text-sm font-medium text-slate-900">
+            {query.result?.estimatedTotalCost?.toLocaleString("ru-RU") ?? 0}
+          </p>
+        </Card>
+        <Card className="p-4 border-slate-200">
+          <p className="text-xs font-medium text-slate-500 mb-1">Сохранено в историю</p>
+          <p className="text-sm font-medium text-slate-900">
+            {query.result?.reportSaved ? "Да" : "Нет"}
+          </p>
+        </Card>
+        <Card className="p-4 border-slate-200">
+          <p className="text-xs font-medium text-slate-500 mb-1">Уверенность</p>
+          <p className="text-sm font-medium text-slate-900">
+            {query.result ? `${Math.round(query.result.confidence.score * 100)}%` : "—"}
+          </p>
+          <p className="mt-1 text-xs text-slate-500">
+            {query.result?.confidence.level === "high"
+              ? "Высокая"
+              : query.result?.confidence.level === "medium"
+                ? "Средняя"
+                : "Низкая"}
+          </p>
+        </Card>
+      </div>
 
       {query.result && (
         <div className="space-y-6">
           <Card className="p-6 border-slate-200">
             <h2 className="text-lg font-semibold text-slate-900 mb-6">Визуализация</h2>
-            <ResponsiveContainer width="100%" height={360}>
-              <BarChart data={query.result.chartData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                <XAxis dataKey="name" tick={{ fill: '#64748b', fontSize: 12 }} />
-                <YAxis tick={{ fill: '#64748b', fontSize: 12 }} />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: '#fff',
-                    border: '1px solid #e2e8f0',
-                    borderRadius: '8px',
-                    fontSize: '14px'
-                  }}
-                />
-                <Bar dataKey="value" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
+            <QueryVisualization result={query.result} />
           </Card>
 
           <Card className="p-6 border-slate-200">
@@ -146,7 +166,7 @@ export function ReportView() {
               <Table>
                 <TableHeader>
                   <TableRow className="bg-slate-50 hover:bg-slate-50">
-                    {Object.keys(query.result.table[0] || {}).map((key) => (
+                    {tableColumns.map((key) => (
                       <TableHead key={key} className="font-semibold text-slate-900">
                         {key.charAt(0).toUpperCase() + key.slice(1).replace(/_/g, ' ')}
                       </TableHead>
@@ -154,17 +174,20 @@ export function ReportView() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {query.result.table.map((row, idx) => (
-                    <TableRow key={idx}>
-                      {Object.values(row).map((value, cellIdx) => (
-                        <TableCell key={cellIdx} className="text-slate-700">
-                          {typeof value === 'number' && value > 1000
-                            ? value.toLocaleString('ru-RU')
-                            : value}
-                        </TableCell>
-                      ))}
-                    </TableRow>
-                  ))}
+                    {query.result.table.map((row, idx) => (
+                      <TableRow key={idx}>
+                        {tableColumns.map((column, cellIdx) => {
+                          const value = row[column];
+                          return (
+                            <TableCell key={cellIdx} className="text-slate-700">
+                              {typeof value === 'number' && value > 1000
+                                ? value.toLocaleString('ru-RU')
+                                : value}
+                            </TableCell>
+                          );
+                        })}
+                      </TableRow>
+                    ))}
                 </TableBody>
               </Table>
             </div>
@@ -183,6 +206,14 @@ export function ReportView() {
               </CollapsibleTrigger>
               <CollapsibleContent>
                 <div className="p-6 pt-2 border-t border-slate-200">
+                  <div className="mb-4 rounded-xl bg-slate-50 px-4 py-3">
+                    <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                      Почему такая уверенность
+                    </p>
+                    <p className="mt-1 text-sm text-slate-700">
+                      {query.result.confidence.reason}
+                    </p>
+                  </div>
                   <p className="text-slate-700 leading-relaxed">{query.result.explanation}</p>
                 </div>
               </CollapsibleContent>

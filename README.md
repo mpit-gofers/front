@@ -9,6 +9,10 @@
 
   Run `npm run dev` to start the development server.
 
+  Frontend sends requests to `POST /api/ask`.
+  In local dev, Vite proxy forwards `/api/*` to `http://localhost:8000`.
+  You can override backend base URL with `VITE_API_BASE_URL` (for example, `http://localhost:8000`).
+
   ## Running with Docker
 
   Development mode (Vite with hot reload):

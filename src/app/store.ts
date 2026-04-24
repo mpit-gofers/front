@@ -1,24 +1,168 @@
-// Simple in-memory store for MVP
+import {
+  AskApiError,
+  askQuestion,
+  ClarificationPayload,
+  ConfidencePayload,
+  VisualizationSpec,
+} from "./api";
+
+export interface PreparedQuestion {
+  id: string;
+  title: string;
+  role: "Ops" | "Finance";
+  question: string;
+  metric: string;
+  actionHint: string;
+}
+
+export interface PreparedQuestionGroup {
+  role: "Ops" | "Finance";
+  title: string;
+  description: string;
+  questions: PreparedQuestion[];
+}
+
+export const PRESET_QUESTION_GROUPS: PreparedQuestionGroup[] = [
+  {
+    role: "Ops",
+    title: "Ops",
+    description: "Операционные сценарии для быстрых решений по отменам, SLA и сменам.",
+    questions: [
+      {
+        id: "OPS-01",
+        title: "Всплеск отмен",
+        role: "Ops",
+        question: "Почему выросли отмены в конкретном городе и часе?",
+        metric: "Cancellation rate по city/hour",
+        actionHint: "Перераспределить смену и проверить доступность водителей.",
+      },
+      {
+        id: "OPS-02",
+        title: "Конверсия в пик",
+        role: "Ops",
+        question: "Почему просела конверсия в часы пик?",
+        metric: "Conversion rate в peak hours",
+        actionHint: "Усилить дежурные смены и проверить задержки ответа.",
+      },
+      {
+        id: "OPS-03",
+        title: "Время подачи",
+        role: "Ops",
+        question: "Почему выросло время подачи заказа?",
+        metric: "Median time-to-pickup",
+        actionHint: "Усилить покрытие в зоне и пересмотреть распределение заказов.",
+      },
+      {
+        id: "OPS-04",
+        title: "Незавершенные заказы",
+        role: "Ops",
+        question: "Где растет доля незавершенных заказов?",
+        metric: "Share of uncompleted orders",
+        actionHint: "Проверить сбои приложения, каналы отказа и проблемные зоны.",
+      },
+      {
+        id: "OPS-05",
+        title: "Просадка по смене",
+        role: "Ops",
+        question: "Почему по одной из смен падает число успешных завершений?",
+        metric: "Successful completions by shift",
+        actionHint: "Сверить состав смены, нагрузку и наличие технических инцидентов.",
+      },
+      {
+        id: "OPS-06",
+        title: "SLA-скачок",
+        role: "Ops",
+        question: "Есть ли локальный SLA-скачок по зоне или часу?",
+        metric: "SLA breach rate по zone/hour",
+        actionHint: "Ограничить нагрузку в зоне и усилить контроль исполнения.",
+      },
+    ],
+  },
+  {
+    role: "Finance",
+    title: "Finance",
+    description: "Финансовые сценарии для выручки, среднего чека и подозрительных отклонений.",
+    questions: [
+      {
+        id: "FIN-01",
+        title: "Просадка выручки",
+        role: "Finance",
+        question: "Почему упала выручка day-over-day или week-over-week?",
+        metric: "Revenue по дню и неделе",
+        actionHint: "Проверить вклад городов, отмен и сезонных факторов.",
+      },
+      {
+        id: "FIN-02",
+        title: "Средний чек",
+        role: "Finance",
+        question: "Почему снизился средний чек в ключевых городах?",
+        metric: "Average order value",
+        actionHint: "Пересмотреть скидки, промо и микс заказов по городу.",
+      },
+      {
+        id: "FIN-03",
+        title: "Подозрительные поездки",
+        role: "Finance",
+        question: "Растет ли доля нулевых или подозрительных поездок?",
+        metric: "Share of zero-value or suspicious trips",
+        actionHint: "Запустить проверку источника аномалии и ограничить сегмент при необходимости.",
+      },
+      {
+        id: "FIN-04",
+        title: "Потери от отмен",
+        role: "Finance",
+        question: "Какой денежный эффект дают отмены?",
+        metric: "Cancellation loss amount",
+        actionHint: "Приоритизировать меры по снижению отмен в топ-городах.",
+      },
+      {
+        id: "FIN-05",
+        title: "Отклонение от плана",
+        role: "Finance",
+        question: "Где выручка отклоняется от плана?",
+        metric: "Plan vs actual revenue variance",
+        actionHint: "Поднять разбор по городам, сменам и каналам.",
+      },
+      {
+        id: "FIN-06",
+        title: "Чистая выручка",
+        role: "Finance",
+        question: "Где падает чистая выручка после скидок?",
+        metric: "Net revenue after discounts",
+        actionHint: "Пересмотреть промо-настройки и ограничить убыточные акции.",
+      },
+    ],
+  },
+];
+
+export interface QueryResult {
+  columns: string[];
+  table: Array<Record<string, unknown>>;
+  explanation: string;
+  confidence: ConfidencePayload;
+  estimatedTotalCost: number;
+  rowCount: number;
+  reportSaved: boolean;
+  reportSavedAt: string;
+  visualization: VisualizationSpec;
+  recommendedActions?: string[];
+}
+
 export interface Query {
   id: string;
   text: string;
   timestamp: number;
-  interpretation?: {
-    understood: string;
-    metrics: string[];
-    period: string;
-    filters: string[];
-    breakdown: string;
-  };
   sql?: string;
   isValid: boolean;
+  needsClarification?: boolean;
+  clarification?: ClarificationPayload;
+  confidence?: ConfidencePayload;
+  refinementTrace?: Array<Record<string, string>>;
   error?: string;
   suggestion?: string;
-  result?: {
-    table: Array<Record<string, any>>;
-    chartData: Array<Record<string, any>>;
-    explanation: string;
-  };
+  errorCode?: string;
+  recommendedActions?: string[];
+  result?: QueryResult;
 }
 
 export interface SavedReport {
@@ -33,165 +177,285 @@ class Store {
   private queries: Map<string, Query> = new Map();
   private reports: Map<string, SavedReport> = new Map();
 
-  // Initialize with sample data
-  constructor() {
-    this.initializeSampleData();
-  }
-
-  private initializeSampleData() {
-    // Sample saved report
-    const sampleQuery: Query = {
-      id: 'sample-1',
-      text: 'Показать продажи по регионам за последний квартал',
-      timestamp: Date.now() - 86400000 * 7,
-      interpretation: {
-        understood: 'Анализ продаж с разбивкой по регионам',
-        metrics: ['Сумма продаж', 'Количество заказов'],
-        period: 'Q1 2026 (январь - март)',
-        filters: ['Статус: завершено'],
-        breakdown: 'По регионам'
-      },
-      sql: `SELECT
-  region,
-  SUM(amount) as total_sales,
-  COUNT(*) as order_count
-FROM sales
-WHERE date >= '2026-01-01'
-  AND date <= '2026-03-31'
-  AND status = 'completed'
-GROUP BY region
-ORDER BY total_sales DESC`,
-      isValid: true,
-      result: {
-        table: [
-          { region: 'Москва', total_sales: 5420000, order_count: 1234 },
-          { region: 'Санкт-Петербург', total_sales: 3210000, order_count: 876 },
-          { region: 'Новосибирск', total_sales: 1890000, order_count: 543 },
-          { region: 'Екатеринбург', total_sales: 1670000, order_count: 487 },
-          { region: 'Казань', total_sales: 1230000, order_count: 356 }
-        ],
-        chartData: [
-          { region: 'Москва', value: 5420000 },
-          { region: 'СПб', value: 3210000 },
-          { region: 'Новосибирск', value: 1890000 },
-          { region: 'Екатеринбург', value: 1670000 },
-          { region: 'Казань', value: 1230000 }
-        ],
-        explanation: 'Анализ показывает, что Москва лидирует по объему продаж с 5.42М₽, что составляет 40% от общего объема. Санкт-Петербург на втором месте с 3.21М₽ (24%). Региональные продажи демонстрируют стабильный рост по сравнению с предыдущим кварталом.'
-      }
-    };
-
-    this.queries.set(sampleQuery.id, sampleQuery);
-
-    const sampleReport: SavedReport = {
-      id: 'report-1',
-      name: 'Квартальный отчет по регионам',
-      queryId: 'sample-1',
-      savedAt: Date.now() - 86400000 * 7,
-      lastRun: Date.now() - 86400000 * 2
-    };
-
-    this.reports.set(sampleReport.id, sampleReport);
-  }
-
-  processQuery(queryText: string): Query {
+  /**
+   * Выполняет пользовательский вопрос через backend и сохраняет нормализованный UI-state.
+   * Вход: текст вопроса и цепочка уточнений.
+   * Выход: объект Query для экрана результата, уточнения или контролируемой ошибки.
+   */
+  async processQuery(
+    queryText: string,
+    refinementTrace: Array<Record<string, string>> = [],
+  ): Promise<Query> {
     const id = `query-${Date.now()}`;
+    const trimmedQuestion = queryText.trim();
 
-    // Simulate query interpretation
-    const query: Query = {
-      id,
-      text: queryText,
-      timestamp: Date.now(),
-      isValid: true
-    };
-
-    // Simple validation logic
-    if (queryText.trim().length < 5) {
-      query.isValid = false;
-      query.error = 'Запрос слишком короткий';
-      query.suggestion = 'Попробуйте описать, какие данные вы хотите увидеть. Например: "Показать выручку по месяцам за 2026 год"';
-    } else {
-      // Mock interpretation
-      query.interpretation = {
-        understood: this.interpretQuery(queryText),
-        metrics: this.extractMetrics(queryText),
-        period: this.extractPeriod(queryText),
-        filters: this.extractFilters(queryText),
-        breakdown: this.extractBreakdown(queryText)
+    if (trimmedQuestion.length < 3) {
+      const query: Query = {
+        id,
+        text: queryText,
+        timestamp: Date.now(),
+        isValid: false,
+        error: "Запрос слишком короткий.",
+        suggestion:
+          "Опишите, какие данные вы хотите получить, например: продажи по регионам за месяц.",
+        recommendedActions: [
+          "Добавьте метрику, например выручку, отмены или средний чек.",
+          "Уточните разрез: город, час, день, канал или период сравнения.",
+        ],
       };
-
-      query.sql = this.generateSQL(query.interpretation);
-      query.result = this.generateMockResult(query.interpretation);
+      this.queries.set(id, query);
+      return query;
     }
 
-    this.queries.set(id, query);
-    return query;
+    try {
+      const response = await askQuestion({
+        question: trimmedQuestion,
+        refinement_trace: refinementTrace,
+      });
+
+      if (response.status === "clarification_needed") {
+        const query: Query = {
+          id,
+          text: response.question,
+          timestamp: Date.now(),
+          isValid: false,
+          needsClarification: true,
+          clarification: response.clarification,
+          confidence: response.confidence,
+          refinementTrace,
+          suggestion: response.clarification.reason,
+          recommendedActions:
+            response.recommended_actions ?? [
+              "Выберите один из безопасных вариантов ниже, чтобы система не строила SQL вслепую.",
+              "Если формулировка все еще не подходит, вернитесь назад и уточните вопрос вручную.",
+            ],
+        };
+        this.queries.set(id, query);
+        return query;
+      }
+
+      const query: Query = {
+        id,
+        text: response.question,
+        timestamp: Date.now(),
+        isValid: true,
+        sql: response.generated_sql,
+        refinementTrace,
+        result: {
+          columns: response.columns,
+          table: response.rows,
+          explanation: response.explain,
+          confidence: response.confidence,
+          estimatedTotalCost: response.estimated_total_cost,
+          rowCount: response.row_count,
+          reportSaved: response.report_saved,
+          reportSavedAt: response.report_saved_at,
+          recommendedActions: response.recommended_actions,
+          visualization:
+            response.visualization ??
+            this.inferVisualizationSpec(
+              response.rows,
+              response.columns,
+              response.question,
+            ),
+        },
+      };
+
+      this.queries.set(id, query);
+      return query;
+    } catch (error) {
+      const apiError = error instanceof AskApiError ? error : null;
+      const query: Query = {
+        id,
+        text: queryText,
+        timestamp: Date.now(),
+        isValid: false,
+        error: apiError?.message ?? "Не удалось выполнить запрос к backend API.",
+        errorCode: apiError?.errorCode,
+        suggestion: this.getSuggestionForError(apiError?.errorCode),
+        recommendedActions:
+          apiError?.recommendedActions ??
+          this.getRecommendedActionsForError(apiError?.errorCode),
+      };
+      this.queries.set(id, query);
+      return query;
+    }
   }
 
-  private interpretQuery(text: string): string {
-    if (text.includes('продаж') || text.includes('выручк')) return 'Анализ продаж';
-    if (text.includes('клиент')) return 'Анализ клиентов';
-    if (text.includes('заказ')) return 'Анализ заказов';
-    return 'Анализ данных';
+  /**
+   * Возвращает короткую подсказку для контролируемого UX ошибки.
+   * Вход: доменный error code backend.
+   * Выход: одна строка с главным советом пользователю.
+   */
+  private getSuggestionForError(errorCode?: string): string {
+    switch (errorCode) {
+      case "SQL_COST_LIMIT_EXCEEDED":
+        return "Сузьте период или добавьте фильтры, чтобы уменьшить стоимость запроса.";
+      case "SQL_MUTATION_BLOCKED":
+      case "SQL_MULTI_STATEMENT_BLOCKED":
+        return "Система принимает только безопасные аналитические запросы в режиме read-only.";
+      case "SQL_CONTEXT_INSUFFICIENT":
+        return "Используйте доступные поля модели: city_id, channel, order_date и метрики выручки/поездок.";
+      case "SQL_PARSE_ERROR":
+        return "Попробуйте сформулировать вопрос через доступные поля таблицы orders.";
+      case "VALIDATION_ERROR":
+        return "Проверьте формат вопроса и попробуйте снова.";
+      default:
+        return "Уточните запрос и попробуйте еще раз. Если ошибка повторяется, проверьте backend.";
+    }
   }
 
-  private extractMetrics(text: string): string[] {
-    const metrics = [];
-    if (text.includes('продаж') || text.includes('выручк')) metrics.push('Сумма продаж');
-    if (text.includes('количество')) metrics.push('Количество');
-    if (text.includes('средн')) metrics.push('Среднее значение');
-    return metrics.length > 0 ? metrics : ['Количество записей'];
+  /**
+   * Готовит следующие шаги для guardrail и validation сценариев, когда backend не прислал action layer.
+   * Вход: доменный error code backend.
+   * Выход: 1-2 действия, которые можно сразу показать пользователю.
+   */
+  private getRecommendedActionsForError(errorCode?: string): string[] {
+    switch (errorCode) {
+      case "SQL_COST_LIMIT_EXCEEDED":
+        return [
+          "Сузьте период и повторите запрос на более коротком окне.",
+          "Добавьте фильтр по городу, смене или каналу, чтобы уменьшить объем выборки.",
+        ];
+      case "SQL_MUTATION_BLOCKED":
+      case "SQL_MULTI_STATEMENT_BLOCKED":
+        return [
+          "Переформулируйте вопрос как аналитический read-only запрос без изменений данных.",
+          "Используйте готовый вопрос из Ops или Finance, если нужен безопасный шаблон.",
+        ];
+      case "SQL_CONTEXT_INSUFFICIENT":
+        return [
+          "Назовите целевую метрику и период сравнения прямо в вопросе.",
+          "Уточните допустимый разрез: город, час, день, канал или смена.",
+        ];
+      case "SQL_PARSE_ERROR":
+        return [
+          "Уберите двусмысленные формулировки и попросите агрегированный срез по orders.",
+          "Проверьте, что вопрос не содержит смешанных инструкций и лишних условий.",
+        ];
+      case "VALIDATION_ERROR":
+        return [
+          "Проверьте, что вопрос не пустой и описывает конкретную бизнес-метрику.",
+          "Используйте один понятный запрос вместо нескольких инструкций в одном тексте.",
+        ];
+      default:
+        return [
+          "Попробуйте переформулировать вопрос короче и конкретнее.",
+          "Если проблема повторяется, вернитесь на главный экран и запустите готовый сценарий.",
+        ];
+    }
   }
 
-  private extractPeriod(text: string): string {
-    if (text.includes('квартал')) return 'Последний квартал';
-    if (text.includes('месяц')) return 'Последний месяц';
-    if (text.includes('год')) return '2026 год';
-    if (text.includes('неделю')) return 'Последняя неделя';
-    return 'Весь период';
-  }
+  private inferVisualizationSpec(
+    rows: Array<Record<string, unknown>>,
+    columns: string[],
+    question: string,
+  ): VisualizationSpec {
+    if (rows.length === 0 || columns.length === 0) {
+      return {
+        type: "table_only",
+        reason: "В результате нет данных для графика.",
+        confidence: 1,
+      };
+    }
 
-  private extractFilters(text: string): string[] {
-    const filters = [];
-    if (text.includes('завершен')) filters.push('Статус: завершено');
-    if (text.includes('актив')) filters.push('Статус: активно');
-    return filters;
-  }
+    const numericFields = columns.filter((field) =>
+      this.isNumericField(field, rows),
+    );
+    const timeFields = columns.filter((field) => this.isTimeField(field, rows));
+    const categoryFields = columns.filter((field) =>
+      this.isCategoryField(field, rows),
+    );
 
-  private extractBreakdown(text: string): string {
-    if (text.includes('регион')) return 'По регионам';
-    if (text.includes('месяц')) return 'По месяцам';
-    if (text.includes('категор')) return 'По категориям';
-    if (text.includes('продукт')) return 'По продуктам';
-    return 'Общий итог';
-  }
+    if (
+      this.looksTemporalQuestion(question) &&
+      timeFields.length > 0 &&
+      numericFields.length > 0
+    ) {
+      return {
+        type: "line",
+        x_field: timeFields[0],
+        y_field: numericFields[0],
+        reason: "Fallback: выбран line chart по времени и метрике.",
+        confidence: 0.7,
+      };
+    }
 
-  private generateSQL(interpretation: any): string {
-    return `SELECT
-  category,
-  COUNT(*) as count,
-  SUM(amount) as total
-FROM data
-WHERE date >= CURRENT_DATE - INTERVAL '30 days'
-GROUP BY category
-ORDER BY total DESC`;
-  }
-
-  private generateMockResult(interpretation: any) {
-    const categories = ['Категория А', 'Категория Б', 'Категория В', 'Категория Г', 'Категория Д'];
+    if (categoryFields.length > 0 && numericFields.length > 0) {
+      return {
+        type: "bar",
+        x_field: categoryFields[0],
+        y_field: numericFields[0],
+        reason: "Fallback: выбран bar chart по категории и метрике.",
+        confidence: 0.6,
+      };
+    }
 
     return {
-      table: categories.map((cat, i) => ({
-        category: cat,
-        count: Math.floor(Math.random() * 500) + 100,
-        total: Math.floor(Math.random() * 2000000) + 500000
-      })),
-      chartData: categories.map((cat, i) => ({
-        name: cat,
-        value: Math.floor(Math.random() * 2000000) + 500000
-      })),
-      explanation: `Анализ данных за указанный период. ${interpretation.understood} с разбивкой ${interpretation.breakdown.toLowerCase()}. Всего обработано записей в выборке.`
+      type: "table_only",
+      reason: "Недостаточно надежных полей для корректной визуализации.",
+      confidence: 0.5,
     };
+  }
+
+  private isNumericField(
+    field: string,
+    rows: Array<Record<string, unknown>>,
+  ): boolean {
+    const lowered = field.toLowerCase();
+    if (lowered.endsWith("_id") || lowered === "id") {
+      return false;
+    }
+    const sample = rows.slice(0, 100).map((row) => row[field]);
+    const numericCount = sample.filter((value) => typeof value === "number").length;
+    return numericCount >= Math.max(1, Math.floor(sample.length / 3));
+  }
+
+  private isTimeField(
+    field: string,
+    rows: Array<Record<string, unknown>>,
+  ): boolean {
+    const lowered = field.toLowerCase();
+    if (
+      lowered.includes("date") ||
+      lowered.includes("time") ||
+      lowered.includes("timestamp")
+    ) {
+      return true;
+    }
+    for (const row of rows.slice(0, 20)) {
+      const value = row[field];
+      if (typeof value !== "string") {
+        continue;
+      }
+      const candidate = value.replace("Z", "+00:00");
+      if (!Number.isNaN(Date.parse(candidate))) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private isCategoryField(
+    field: string,
+    rows: Array<Record<string, unknown>>,
+  ): boolean {
+    const lowered = field.toLowerCase();
+    if (lowered.endsWith("_id") || lowered === "id") {
+      return false;
+    }
+    const values = rows.slice(0, 300).map((row) => row[field]).filter((v) => v != null);
+    if (values.length === 0 || !values.every((v) => typeof v === "string")) {
+      return false;
+    }
+    const cardinality = new Set(values as string[]).size;
+    return cardinality >= 2 && cardinality <= 20;
+  }
+
+  private looksTemporalQuestion(question: string): boolean {
+    const q = question.toLowerCase();
+    const tokens = ["день", "месяц", "год", "недел", "динам", "тренд"];
+    return tokens.some((token) => q.includes(token));
   }
 
   getQuery(id: string): Query | undefined {
@@ -204,7 +468,7 @@ ORDER BY total DESC`;
       id,
       name,
       queryId,
-      savedAt: Date.now()
+      savedAt: Date.now(),
     };
     this.reports.set(id, report);
     return report;
@@ -218,19 +482,26 @@ ORDER BY total DESC`;
     return Array.from(this.reports.values()).sort((a, b) => b.savedAt - a.savedAt);
   }
 
-  rerunReport(reportId: string): Query | null {
+  async rerunReport(reportId: string): Promise<Query | null> {
     const report = this.reports.get(reportId);
-    if (!report) return null;
+    if (!report) {
+      return null;
+    }
 
     const originalQuery = this.queries.get(report.queryId);
-    if (!originalQuery) return null;
+    if (!originalQuery) {
+      return null;
+    }
 
-    const newQuery = this.processQuery(originalQuery.text);
+    const newQuery = await this.processQuery(
+      originalQuery.text,
+      originalQuery.refinementTrace ?? [],
+    );
     report.lastRun = Date.now();
     return newQuery;
   }
 
-  deleteReport(id: string) {
+  deleteReport(id: string): void {
     this.reports.delete(id);
   }
 }

@@ -6,7 +6,17 @@ import { Card } from "./ui/card";
 import { PRESET_QUESTION_GROUPS, type PreparedQuestion } from "../store";
 import { Textarea } from "./ui/textarea";
 import { PilotKpiPanel } from "./PilotKpiPanel";
-import { PilotScorecard } from "./PilotScorecard";
+
+function getGroupHeading(role: PreparedQuestion["role"]): string {
+  switch (role) {
+    case "Ops":
+      return "Операционный контур";
+    case "Finance":
+      return "Финансовый контур";
+    case "Safety":
+      return "Контур безопасности";
+  }
+}
 
 /**
  * Главный экран Decision Room.
@@ -68,7 +78,7 @@ export function Home() {
       <div className="mb-12 text-center">
         <div className="mb-6 inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1.5 text-sm font-medium text-blue-700">
           <Sparkles className="h-4 w-4" />
-          Drivee Decision Room
+          Selectoria
         </div>
         <h1 className="mb-4 text-5xl font-bold tracking-tight text-slate-900">
           Вопросы для Ops и Finance
@@ -79,10 +89,6 @@ export function Home() {
           Запускайте готовые decision-сценарии в один клик или задайте свой вопрос.
           Ответы остаются проверяемыми: с trust-контуром, SQL и следующими шагами.
         </p>
-      </div>
-
-      <div className="mb-10">
-        <PilotScorecard />
       </div>
 
       <PilotKpiPanel />
@@ -142,7 +148,7 @@ export function Home() {
                   {group.title}
                 </p>
                 <h3 className="mt-2 text-xl font-semibold text-slate-900">
-                  {group.role === "Ops" ? "Операционный контур" : "Финансовый контур"}
+                  {getGroupHeading(group.role)}
                 </h3>
                 <p className="mt-2 text-sm text-slate-600">{group.description}</p>
               </div>

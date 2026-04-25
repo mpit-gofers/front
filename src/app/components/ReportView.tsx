@@ -13,7 +13,7 @@ import {
   ChevronDown,
   Code,
   Lightbulb,
-  FileText
+  FileText,
 } from "lucide-react";
 import { store } from "../store";
 
@@ -22,6 +22,7 @@ export function ReportView() {
   const navigate = useNavigate();
   const [sqlOpen, setSqlOpen] = useState(false);
   const [explainOpen, setExplainOpen] = useState(false);
+  const [tableOpen, setTableOpen] = useState(false);
 
   const report = store.getReport(reportId!);
   const query = report ? store.getQuery(report.queryId) : null;
@@ -160,38 +161,59 @@ export function ReportView() {
             <QueryVisualization result={query.result} />
           </Card>
 
-          <Card className="p-6 border-slate-200">
-            <h2 className="text-lg font-semibold text-slate-900 mb-6">Таблица данных</h2>
-            <div className="border border-slate-200 rounded-lg overflow-hidden">
-              <Table>
-                <TableHeader>
-                  <TableRow className="bg-slate-50 hover:bg-slate-50">
-                    {tableColumns.map((key) => (
-                      <TableHead key={key} className="font-semibold text-slate-900">
-                        {key.charAt(0).toUpperCase() + key.slice(1).replace(/_/g, ' ')}
-                      </TableHead>
-                    ))}
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                    {query.result.table.map((row, idx) => (
-                      <TableRow key={idx}>
-                        {tableColumns.map((column, cellIdx) => {
-                          const value = row[column];
-                          return (
-                            <TableCell key={cellIdx} className="text-slate-700">
-                              {typeof value === 'number' && value > 1000
-                                ? value.toLocaleString('ru-RU')
-                                : value}
-                            </TableCell>
-                          );
-                        })}
-                      </TableRow>
-                    ))}
-                </TableBody>
-              </Table>
-            </div>
-          </Card>
+          <Collapsible open={tableOpen} onOpenChange={setTableOpen}>
+            <Card className="border-slate-200 overflow-hidden">
+              <CollapsibleTrigger className="w-full p-4 flex items-center justify-between hover:bg-slate-50 transition-colors">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
+                    <FileText className="w-4 h-4 text-blue-600" />
+                  </div>
+                  <div className="text-left">
+                    <span className="font-semibold text-slate-900">Таблица данных</span>
+                    <p className="text-xs text-slate-500">
+                      {query.result.table.length > 0
+                        ? `${query.result.table.length.toLocaleString("ru-RU")} строк`
+                        : "Нет строк"}
+                    </p>
+                  </div>
+                </div>
+                <ChevronDown className={`w-5 h-5 text-slate-400 transition-transform ${tableOpen ? 'rotate-180' : ''}`} />
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <div className="p-6 pt-2 border-t border-slate-200">
+                  <div className="border border-slate-200 rounded-lg overflow-hidden">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="bg-slate-50 hover:bg-slate-50">
+                          {tableColumns.map((key) => (
+                            <TableHead key={key} className="font-semibold text-slate-900">
+                              {key.charAt(0).toUpperCase() + key.slice(1).replace(/_/g, ' ')}
+                            </TableHead>
+                          ))}
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {query.result.table.map((row, idx) => (
+                          <TableRow key={idx}>
+                            {tableColumns.map((column, cellIdx) => {
+                              const value = row[column];
+                              return (
+                                <TableCell key={cellIdx} className="text-slate-700">
+                                  {typeof value === 'number' && value > 1000
+                                    ? value.toLocaleString('ru-RU')
+                                    : value}
+                                </TableCell>
+                              );
+                            })}
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </div>
+              </CollapsibleContent>
+            </Card>
+          </Collapsible>
 
           <Collapsible open={explainOpen} onOpenChange={setExplainOpen}>
             <Card className="border-slate-200 overflow-hidden">

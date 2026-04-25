@@ -6,6 +6,7 @@ import {
   CheckCircle2,
   ChevronDown,
   Code,
+  FileText,
   Lightbulb,
   Save,
   ShieldAlert,
@@ -234,6 +235,7 @@ export function ResultScreen() {
   const [reportName, setReportName] = useState("");
   const [sqlOpen, setSqlOpen] = useState(false);
   const [explainOpen, setExplainOpen] = useState(false);
+  const [tableOpen, setTableOpen] = useState(false);
   const [customClarificationValue, setCustomClarificationValue] = useState("");
 
   const query = store.getQuery(queryId!);
@@ -663,48 +665,73 @@ export function ResultScreen() {
           <QueryVisualization result={result} />
         </Card>
 
-        <Card className="border-slate-200 p-6">
-          <h2 className="mb-6 text-lg font-semibold text-slate-900">Таблица данных</h2>
-          {result.table.length > 0 ? (
-            <div className="overflow-hidden rounded-lg border border-slate-200">
-              <Table>
-                <TableHeader>
-                  <TableRow className="bg-slate-50 hover:bg-slate-50">
-                    {tableColumns.map((key) => (
-                      <TableHead key={key} className="font-semibold text-slate-900">
-                        {key.charAt(0).toUpperCase() + key.slice(1).replace(/_/g, " ")}
-                      </TableHead>
-                    ))}
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {result.table.map((row, idx) => (
-                    <TableRow key={idx}>
-                      {tableColumns.map((column, cellIdx) => {
-                        const value = row[column];
-                        return (
-                          <TableCell key={cellIdx} className="text-slate-700">
-                            {typeof value === "number" && value > 1000
-                              ? value.toLocaleString("ru-RU")
-                              : String(value ?? "—")}
-                          </TableCell>
-                        );
-                      })}
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          ) : (
-            <Alert className="border-slate-200 bg-slate-50">
-              <AlertCircle className="h-4 w-4 text-slate-600" />
-              <AlertTitle>Нет строк для показа</AlertTitle>
-              <AlertDescription className="text-slate-700">
-                Ответ пришел без строк. Проверьте фильтры или период и повторите запуск.
-              </AlertDescription>
-            </Alert>
-          )}
-        </Card>
+        <Collapsible open={tableOpen} onOpenChange={setTableOpen}>
+          <Card className="overflow-hidden border-slate-200">
+            <CollapsibleTrigger className="flex w-full items-center justify-between p-4 transition-colors hover:bg-slate-50">
+              <div className="flex items-center gap-3">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-100">
+                  <FileText className="h-4 w-4 text-blue-600" />
+                </div>
+                <div className="text-left">
+                  <span className="font-semibold text-slate-900">Таблица данных</span>
+                  <p className="text-xs text-slate-500">
+                    {result.table.length > 0
+                      ? `${result.table.length.toLocaleString("ru-RU")} строк`
+                      : "Нет строк"}
+                  </p>
+                </div>
+              </div>
+              <ChevronDown
+                className={`h-5 w-5 text-slate-400 transition-transform ${
+                  tableOpen ? "rotate-180" : ""
+                }`}
+              />
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <div className="border-t border-slate-200 p-6 pt-2">
+                {result.table.length > 0 ? (
+                  <div className="overflow-hidden rounded-lg border border-slate-200">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="bg-slate-50 hover:bg-slate-50">
+                          {tableColumns.map((key) => (
+                            <TableHead key={key} className="font-semibold text-slate-900">
+                              {key.charAt(0).toUpperCase() + key.slice(1).replace(/_/g, " ")}
+                            </TableHead>
+                          ))}
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {result.table.map((row, idx) => (
+                          <TableRow key={idx}>
+                            {tableColumns.map((column, cellIdx) => {
+                              const value = row[column];
+                              return (
+                                <TableCell key={cellIdx} className="text-slate-700">
+                                  {typeof value === "number" && value > 1000
+                                    ? value.toLocaleString("ru-RU")
+                                    : String(value ?? "—")}
+                                </TableCell>
+                              );
+                            })}
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                ) : (
+                  <Alert className="border-slate-200 bg-slate-50">
+                    <AlertCircle className="h-4 w-4 text-slate-600" />
+                    <AlertTitle>Нет строк для показа</AlertTitle>
+                    <AlertDescription className="text-slate-700">
+                      Ответ пришел без строк. Проверьте фильтры или период и повторите запуск.
+                    </AlertDescription>
+                  </Alert>
+                )}
+              </div>
+            </CollapsibleContent>
+          </Card>
+        </Collapsible>
 
         <Collapsible open={explainOpen} onOpenChange={setExplainOpen}>
           <Card className="overflow-hidden border-slate-200">

@@ -14,7 +14,7 @@ export function RootLayout() {
               <div className="w-9 h-9 bg-gradient-to-br from-blue-600 to-blue-700 rounded-lg flex items-center justify-center group-hover:shadow-lg transition-shadow">
                 <Sparkles className="w-5 h-5 text-white" />
               </div>
-              <span className="text-xl font-semibold text-slate-900">Selectoria</span>
+              <span className="text-xl font-semibold text-slate-900">Selectorica</span>
             </Link>
 
             <nav className="flex items-center gap-2">

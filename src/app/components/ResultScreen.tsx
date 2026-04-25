@@ -149,7 +149,7 @@ function buildClarifiedQuestion(
 }
 
 /**
- * Формирует подпись дефолта так, чтобы пользователь видел применяемое предположение.
+ * Формирует подпись optional default из payload, если backend явно его прислал.
  * Вход: label/value из clarification payload.
  * Выход: человекочитаемая фраза для кнопки и повторного запроса.
  */
@@ -159,10 +159,6 @@ function getClarificationDefaultLabel(
 ): string {
   if (defaultLabel?.trim()) {
     return defaultLabel.trim();
-  }
-
-  if (defaultValue === "last_7_days") {
-    return "последние 7 дней";
   }
 
   return defaultValue?.trim() ?? "";

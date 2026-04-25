@@ -33,9 +33,39 @@ test("preset cards require explicit launch action", () => {
   assert.doesNotMatch(homeSource, /onKeyDown=\{\(event\) =>/);
 });
 
-test("home screen explains preset default period before launch", () => {
-  assert.match(homeSource, /Период по умолчанию/);
+test("home screen does not advertise last-7-days as default period", () => {
+  assert.doesNotMatch(homeSource, /Период по умолчанию/);
+  assert.doesNotMatch(homeSource, /DEFAULT_DATE_RANGE_PARAM/);
+  assert.doesNotMatch(homeSource, /default_params/);
+  assert.doesNotMatch(storeSource, /предложенным дефолтом/);
   assert.doesNotMatch(homeSource, /Вопросы для Ops и Finance/);
+});
+
+test("prepared business questions use approved March and February 2025 prompts", () => {
+  const expectedQuestions = [
+    "Покажи количество заказов по статусам с 1 марта по 7 марта 2025 года",
+    "Покажи выручку по дням с 10 февраля по 17 февраля 2025 года",
+    "Покажи среднюю длительность поездки по дням с 5 января по 12 января 2025 года",
+    "Покажи среднюю стоимость заказа по дням с 15 марта по 22 марта 2025 года",
+    "Покажи количество отмен пассажирами по дням с 1 марта по 7 марта 2025 года",
+    "Покажи количество заказов с тендерами и без с 1 марта по 7 марта 2025 года",
+    "Покажи среднюю дистанцию поездки по дням с 1 февраля по 7 февраля 2025 года",
+    "Покажи количество завершённых поездок по дням с 1 марта по 7 марта 2025 года",
+    "Покажи конверсию из заказа в поездку с 1 марта по 7 марта 2025 года",
+  ];
+
+  for (const question of expectedQuestions) {
+    assert.match(storeSource, new RegExp(question));
+  }
+
+  assert.doesNotMatch(storeSource, /Почему выросли отмены в конкретном городе и часе/);
+  assert.doesNotMatch(storeSource, /Почему упала выручка day-over-day или week-over-week/);
+});
+
+test("prepared questions rely on explicit dates or backend period clarification", () => {
+  assert.doesNotMatch(storeSource, /usesDefaultDateRange/);
+  assert.doesNotMatch(homeSource, /usesDefaultDateRange/);
+  assert.match(homeSource, /Период: указан в вопросе или будет уточнен/);
 });
 
 test("home screen renders a modest pilot KPI panel from optional snapshot", () => {

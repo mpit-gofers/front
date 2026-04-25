@@ -11,12 +11,6 @@ import {
 } from "../store";
 import { Textarea } from "./ui/textarea";
 
-const DEFAULT_DATE_RANGE_PARAM = {
-  value: "last_7_days",
-  label: "последние 7 дней",
-  source: "scenario_default",
-};
-
 type ScenarioFilter = "business" | "all" | "Ops" | "Finance" | "Safety" | "demo";
 
 const SCENARIO_FILTERS: Array<{ label: string; value: ScenarioFilter }> = [
@@ -59,6 +53,33 @@ function getGroupHeading(role: PreparedQuestion["role"]): string {
     case "Safety":
       return "Контур безопасности";
   }
+}
+
+/**
+ * Склоняет счетчик сценариев для карточек, где количество может быть 1, 2-4 или больше.
+ * Вход: количество вопросов в группе.
+ * Выход: короткая подпись для бейджа группы.
+ */
+function formatScenarioCount(count: number): string {
+  const mod10 = count % 10;
+  const mod100 = count % 100;
+
+  if (mod10 === 1 && mod100 !== 11) {
+    return `${count} сценарий`;
+  }
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) {
+    return `${count} сценария`;
+  }
+  return `${count} сценариев`;
+}
+
+/**
+ * Возвращает подпись периода для preset-карточки без смешивания явного диапазона и дефолта.
+ * Вход: один готовый вопрос.
+ * Выход: строка для карточки под next step.
+ */
+function getPresetPeriodLabel(): string {
+  return "Период: указан в вопросе или будет уточнен";
 }
 
 /**
@@ -178,14 +199,13 @@ export function Home() {
    */
   const handlePresetLaunch = (preset: PreparedQuestion) => {
     setQuery(preset.question);
-    launchQuery(preset.question, {
+    const context: AnalysisContext = {
       scenario_id: preset.id,
       role: preset.role,
       action_hint: preset.actionHint,
-      default_params: {
-        date_range: DEFAULT_DATE_RANGE_PARAM,
-      },
-    });
+    };
+
+    launchQuery(preset.question, context);
   };
 
   const visibleGroups = PRESET_QUESTION_GROUPS.filter((group) =>
@@ -272,7 +292,7 @@ export function Home() {
           <p className="mt-2 text-sm text-slate-600">{group.description}</p>
         </div>
         <div className="rounded-full border border-slate-200 px-3 py-1 text-xs font-medium text-slate-600">
-          {group.questions.length} сценариев
+          {formatScenarioCount(group.questions.length)}
         </div>
       </div>
 
@@ -299,7 +319,7 @@ export function Home() {
               Следующий шаг: {preset.actionHint}
             </p>
             <p className="mt-2 text-xs font-medium text-slate-500">
-              Период по умолчанию: {DEFAULT_DATE_RANGE_PARAM.label}
+              {getPresetPeriodLabel()}
             </p>
             <div className="mt-4 flex flex-wrap gap-2">
               <Button
@@ -331,7 +351,7 @@ export function Home() {
       <div className="mb-12 text-center">
         <div className="mb-6 inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1.5 text-sm font-medium text-blue-700">
           <Sparkles className="h-4 w-4" />
-          Selectoria
+          Selectorica
         </div>
         <h1 className="mb-4 text-5xl font-bold tracking-tight text-slate-900">
           Вопросы к данным заказов
@@ -362,7 +382,7 @@ export function Home() {
             <Textarea
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Например: Почему упала выручка day-over-day или week-over-week?"
+              placeholder="Например: Покажи выручку по дням с 10 февраля по 17 февраля 2025 года"
               className="min-h-[140px] resize-none border-slate-300 pr-28 text-base shadow-sm focus:border-blue-500 focus:ring-blue-500"
             />
             <Button

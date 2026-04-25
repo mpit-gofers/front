@@ -50,25 +50,34 @@ function toVisualizationData(result: QueryResult): VisualizationPoint[] {
 export function QueryVisualization({ result }: QueryVisualizationProps) {
   const spec = result.visualization;
   const chartData = toVisualizationData(result);
+  const confidenceLabel = `${Math.round(spec.confidence * 100)}%`;
 
   if (spec.type === "table_only") {
     return (
-      <p className="text-sm text-slate-600">
-        {spec.reason}
-      </p>
+      <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
+        <p className="text-sm text-slate-700">{spec.reason}</p>
+        <p className="mt-1 text-xs text-slate-500">
+          Надежность визуализации: {confidenceLabel}
+        </p>
+      </div>
     );
   }
 
   if (chartData.length === 0) {
     return (
-      <p className="text-sm text-slate-600">
-        Недостаточно данных для построения графика. {spec.reason}
-      </p>
+      <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
+        <p className="text-sm text-slate-700">
+          Недостаточно данных для построения графика. {spec.reason}
+        </p>
+        <p className="mt-1 text-xs text-slate-500">
+          Надежность визуализации: {confidenceLabel}
+        </p>
+      </div>
     );
   }
 
-  if (spec.type === "line") {
-    return (
+  const chart =
+    spec.type === "line" ? (
       <ResponsiveContainer width="100%" height={360}>
         <LineChart data={chartData}>
           <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
@@ -85,25 +94,34 @@ export function QueryVisualization({ result }: QueryVisualizationProps) {
           <Line type="monotone" dataKey="value" stroke="#3b82f6" strokeWidth={2} />
         </LineChart>
       </ResponsiveContainer>
+    ) : (
+      <ResponsiveContainer width="100%" height={360}>
+        <BarChart data={chartData}>
+          <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+          <XAxis dataKey="name" tick={{ fill: "#64748b", fontSize: 12 }} />
+          <YAxis tick={{ fill: "#64748b", fontSize: 12 }} />
+          <Tooltip
+            contentStyle={{
+              backgroundColor: "#fff",
+              border: "1px solid #e2e8f0",
+              borderRadius: "8px",
+              fontSize: "14px",
+            }}
+          />
+          <Bar dataKey="value" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+        </BarChart>
+      </ResponsiveContainer>
     );
-  }
 
   return (
-    <ResponsiveContainer width="100%" height={360}>
-      <BarChart data={chartData}>
-        <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-        <XAxis dataKey="name" tick={{ fill: "#64748b", fontSize: 12 }} />
-        <YAxis tick={{ fill: "#64748b", fontSize: 12 }} />
-        <Tooltip
-          contentStyle={{
-            backgroundColor: "#fff",
-            border: "1px solid #e2e8f0",
-            borderRadius: "8px",
-            fontSize: "14px",
-          }}
-        />
-        <Bar dataKey="value" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-      </BarChart>
-    </ResponsiveContainer>
+    <div className="space-y-3">
+      {chart}
+      <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
+        <p className="text-sm text-slate-700">Почему выбран график: {spec.reason}</p>
+        <p className="mt-1 text-xs text-slate-500">
+          Надежность визуализации: {confidenceLabel}
+        </p>
+      </div>
+    </div>
   );
 }

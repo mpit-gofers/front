@@ -1,16 +1,30 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
-import { BarChart3, Brain, CheckCircle, Database, ShieldCheck } from "lucide-react";
-import { store } from "../store";
+import { BarChart3, Brain, CheckCircle, ShieldCheck } from "lucide-react";
+import { store, type AnalysisContext } from "../store";
 import { Card } from "./ui/card";
 import { Progress } from "./ui/progress";
 
+const MAX_WAITING_PROGRESS = 90;
+const MIN_VISIBLE_MS = 700;
+const COMPLETION_PAUSE_MS = 250;
+const LONG_WAIT_MS = 8000;
+
 const STEPS = [
-  { icon: Brain, label: "Анализ запроса", duration: 800 },
-  { icon: Database, label: "Генерация SQL", duration: 1000 },
-  { icon: BarChart3, label: "Подготовка визуализации", duration: 600 },
-  { icon: CheckCircle, label: "Валидация завершена", duration: 100 },
+  { icon: Brain, label: "Понимаем вопрос", duration: 700 },
+  { icon: ShieldCheck, label: "Проверяем ограничения", duration: 900 },
+  { icon: BarChart3, label: "Готовим ответ", duration: 900 },
+  { icon: CheckCircle, label: "Ждем результат", duration: 600 },
 ];
+
+/**
+ * Делает короткую UI-паузу без привязки к backend-стадиям.
+ * Вход: длительность ожидания в миллисекундах.
+ * Выход: promise, который завершается после указанного времени.
+ */
+function wait(ms: number): Promise<void> {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
 
 /**
  * Нормализует refinement trail из sessionStorage.
@@ -31,6 +45,28 @@ function parseRefinementTrace(rawTrail: string | null): Array<Record<string, str
 }
 
 /**
+ * Нормализует analysis context из sessionStorage.
+ * Вход: сырое JSON-значение pendingAskContext.
+ * Выход: объект контекста или пустой объект, если значение невалидно.
+ */
+function parseAnalysisContext(rawContext: string | null): AnalysisContext {
+  if (!rawContext) {
+    return {};
+  }
+
+  try {
+    const parsed = JSON.parse(rawContext);
+    if (typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)) {
+      return parsed as AnalysisContext;
+    }
+  } catch {
+    return {};
+  }
+
+  return {};
+}
+
+/**
  * Экран загрузки, который сохраняет существующий flow и заранее объясняет trust-контур.
  * Вход: pendingQuery и clarificationTrail из sessionStorage.
  * Выход: переход на ResultScreen после завершения processQuery.
@@ -40,10 +76,12 @@ export function LoadingScreen() {
   const [currentStep, setCurrentStep] = useState(0);
   const [progress, setProgress] = useState(0);
   const [queryPreview, setQueryPreview] = useState("");
+  const [longWaitVisible, setLongWaitVisible] = useState(false);
 
   useEffect(() => {
     const queryText = sessionStorage.getItem("pendingQuery");
     const rawTrail = sessionStorage.getItem("clarificationTrail");
+    const rawContext = sessionStorage.getItem("pendingAskContext");
 
     if (!queryText) {
       navigate("/");
@@ -51,26 +89,65 @@ export function LoadingScreen() {
     }
 
     setQueryPreview(queryText);
+    setCurrentStep(0);
+    setProgress(5);
+    setLongWaitVisible(false);
 
     const timers: number[] = [];
+    let isActive = true;
     let totalTime = 0;
     STEPS.forEach((step, index) => {
       totalTime += step.duration;
       const timer = window.setTimeout(() => {
+        if (!isActive) {
+          return;
+        }
         setCurrentStep(index);
-        setProgress(((index + 1) / STEPS.length) * 100);
+        setProgress(
+          Math.min(
+            ((index + 1) / STEPS.length) * MAX_WAITING_PROGRESS,
+            MAX_WAITING_PROGRESS,
+          ),
+        );
       }, totalTime - step.duration);
       timers.push(timer);
     });
+    timers.push(
+      window.setTimeout(() => {
+        if (isActive) {
+          setLongWaitVisible(true);
+        }
+      }, LONG_WAIT_MS),
+    );
 
     const run = async () => {
       const refinementTrace = parseRefinementTrace(rawTrail);
-      const queryPromise = store.processQuery(queryText, refinementTrace);
-      await new Promise((resolve) => window.setTimeout(resolve, totalTime));
+      const analysisContext = parseAnalysisContext(rawContext);
+      const startedAt = Date.now();
+      const queryPromise = store.processQuery(
+        queryText,
+        refinementTrace,
+        analysisContext,
+      );
       const query = await queryPromise;
+      const elapsedMs = Date.now() - startedAt;
+      if (elapsedMs < MIN_VISIBLE_MS) {
+        await wait(MIN_VISIBLE_MS - elapsedMs);
+      }
+      if (!isActive) {
+        return;
+      }
+      timers.forEach((timer) => window.clearTimeout(timer));
+      setCurrentStep(STEPS.length - 1);
+      setProgress(100);
       sessionStorage.removeItem("pendingQuery");
       if (query.isValid) {
+        sessionStorage.removeItem("pendingAskContext");
         sessionStorage.removeItem("clarificationTrail");
+      }
+      await wait(COMPLETION_PAUSE_MS);
+      if (!isActive) {
+        return;
       }
       navigate(`/result/${query.id}`);
     };
@@ -78,6 +155,7 @@ export function LoadingScreen() {
     void run();
 
     return () => {
+      isActive = false;
       timers.forEach((timer) => window.clearTimeout(timer));
     };
   }, [navigate]);
@@ -87,7 +165,7 @@ export function LoadingScreen() {
       <div className="mb-12 text-center">
         <h1 className="mb-2 text-3xl font-bold text-slate-900">Обрабатываем запрос</h1>
         <p className="text-slate-600">
-          Decision Room анализирует вопрос, проверяет guardrails и готовит ответ.
+          Decision Room анализирует вопрос, проверяет ограничения безопасности и готовит ответ.
         </p>
       </div>
 
@@ -144,6 +222,12 @@ export function LoadingScreen() {
 
       <div className="mb-6 px-1">
         <Progress value={progress} className="h-1.5" />
+        {longWaitVisible && (
+          <p className="mt-3 text-sm text-slate-600">
+            Ответ занимает больше обычного. Мы все еще ждем безопасный результат и
+            не закрываем экран, пока проверка не завершится.
+          </p>
+        )}
       </div>
 
       <Card className="border-blue-200 bg-blue-50 p-5">

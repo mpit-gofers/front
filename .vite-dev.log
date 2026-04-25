@@ -1,0 +1,16 @@
+
+> @figma/my-make-file@0.0.1 dev
+> vite --host 127.0.0.1 --port 5174
+
+
+  [32m[1mVITE[22m v6.3.5[39m  [2mready in [0m[1m798[22m[2m[0m ms[22m
+
+  [32m➜[39m  [1mLocal[22m:   [36mhttp://127.0.0.1:[1m5174[22m/[39m
+[2m11:28:17[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/styles/index.css, /src/app/components/Home.tsx, /src/app/components/LoadingScreen.tsx, /src/app/components/ReportView.tsx, /src/app/components/ReportsLibrary.tsx, /src/app/components/ResultScreen.tsx[22m
+[2m11:59:31[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/app/components/ResultScreen.tsx, /src/styles/index.css[22m
+[2m12:04:59[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/@fs/C:\dev\drivee_mpit\front\src\app\components\QueryVisualization.tsx, /src/styles/index.css[22m
+[2m12:05:18[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/styles/index.css, /src/app/components/Home.tsx, /src/app/components/LoadingScreen.tsx, /src/app/components/ReportView.tsx, /src/app/components/ReportsLibrary.tsx, /src/app/components/ResultScreen.tsx[22m
+[2m12:05:38[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/@fs/C:\dev\drivee_mpit\front\src\app\components\QueryVisualization.tsx, /src/styles/index.css[22m
+[2m12:07:24[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/app/components/Home.tsx, /src/styles/index.css[22m
+[2m12:09:13[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/app/components/Home.tsx, /src/styles/index.css[22m
+[2m12:09:30[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/app/components/Home.tsx, /src/styles/index.css[22m

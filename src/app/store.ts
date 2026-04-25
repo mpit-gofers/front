@@ -6,6 +6,8 @@ import {
   VisualizationSpec,
 } from "./api";
 
+export type AnalysisContext = Record<string, unknown>;
+
 export interface PreparedQuestion {
   id: string;
   title: string;
@@ -17,6 +19,7 @@ export interface PreparedQuestion {
 
 export interface PreparedQuestionGroup {
   role: "Ops" | "Finance" | "Safety";
+  category: "business" | "demo";
   title: string;
   description: string;
   questions: PreparedQuestion[];
@@ -25,6 +28,7 @@ export interface PreparedQuestionGroup {
 export const PRESET_QUESTION_GROUPS: PreparedQuestionGroup[] = [
   {
     role: "Ops",
+    category: "business",
     title: "Ops",
     description: "Операционные сценарии для быстрых решений по отменам, SLA и сменам.",
     questions: [
@@ -80,6 +84,7 @@ export const PRESET_QUESTION_GROUPS: PreparedQuestionGroup[] = [
   },
   {
     role: "Finance",
+    category: "business",
     title: "Finance",
     description: "Финансовые сценарии для выручки, среднего чека и подозрительных отклонений.",
     questions: [
@@ -138,6 +143,7 @@ export const PRESET_QUESTION_GROUPS: PreparedQuestionGroup[] = [
 PRESET_QUESTION_GROUPS.unshift(
   {
     role: "Ops",
+    category: "demo",
     title: "Demo Ops",
     description:
       "Вопросы для ручного демо по реальным полям train.csv: город, час, статусы и воронка поездки.",
@@ -186,6 +192,7 @@ PRESET_QUESTION_GROUPS.unshift(
   },
   {
     role: "Finance",
+    category: "demo",
     title: "Demo Finance",
     description:
       "Финансовые вопросы для ручного демо по цене заказа, тендерной цене и дневной выручке.",
@@ -224,6 +231,7 @@ PRESET_QUESTION_GROUPS.unshift(
   },
   {
     role: "Safety",
+    category: "demo",
     title: "Demo Safety",
     description:
       "Контрольный вопрос для показа controlled refusal и безопасного поведения системы.",
@@ -253,6 +261,9 @@ export interface QueryResult {
   reportSavedAt: string;
   visualization: VisualizationSpec;
   recommendedActions?: string[];
+  assumptions?: string[];
+  resolvedParams?: Record<string, unknown>;
+  decisionEvents?: Array<Record<string, unknown>>;
 }
 
 export interface Query {
@@ -269,6 +280,9 @@ export interface Query {
   suggestion?: string;
   errorCode?: string;
   recommendedActions?: string[];
+  assumptions?: string[];
+  resolvedParams?: Record<string, unknown>;
+  decisionEvents?: Array<Record<string, unknown>>;
   result?: QueryResult;
 }
 
@@ -283,6 +297,7 @@ export interface SavedReport {
 class Store {
   private queries: Map<string, Query> = new Map();
   private reports: Map<string, SavedReport> = new Map();
+  private lastResolvedParams: Record<string, unknown> = {};
 
   /**
    * Выполняет пользовательский вопрос через backend и сохраняет нормализованный UI-state.
@@ -292,6 +307,7 @@ class Store {
   async processQuery(
     queryText: string,
     refinementTrace: Array<Record<string, string>> = [],
+    context: AnalysisContext = {},
   ): Promise<Query> {
     const id = `query-${Date.now()}`;
     const trimmedQuestion = queryText.trim();
@@ -318,9 +334,11 @@ class Store {
       const response = await askQuestion({
         question: trimmedQuestion,
         refinement_trace: refinementTrace,
+        context: this.buildAnalysisContext(context),
       });
 
       if (response.status === "clarification_needed") {
+        this.captureResolvedParams(response.resolved_params);
         const query: Query = {
           id,
           text: response.question,
@@ -330,17 +348,24 @@ class Store {
           clarification: response.clarification,
           confidence: response.confidence,
           refinementTrace,
+          assumptions: response.assumptions ?? [],
+          resolvedParams: response.resolved_params ?? {},
+          decisionEvents: response.decision_events ?? [],
           suggestion: response.clarification.reason,
           recommendedActions:
             response.recommended_actions ?? [
-              "Выберите один из безопасных вариантов ниже, чтобы система не строила SQL вслепую.",
-              "Если формулировка все еще не подходит, вернитесь назад и уточните вопрос вручную.",
+              "Продолжите с предложенным дефолтом, если он подходит для задачи.",
+              "Укажите свой период или параметр вручную, если быстрые варианты не подходят.",
             ],
         };
         this.queries.set(id, query);
         return query;
       }
 
+      this.captureResolvedParams(response.resolved_params);
+      const assumptions = response.assumptions ?? [];
+      const resolvedParams = response.resolved_params ?? {};
+      const decisionEvents = response.decision_events ?? [];
       const query: Query = {
         id,
         text: response.question,
@@ -348,6 +373,9 @@ class Store {
         isValid: true,
         sql: response.generated_sql,
         refinementTrace,
+        assumptions,
+        resolvedParams,
+        decisionEvents,
         result: {
           columns: response.columns,
           table: response.rows,
@@ -358,6 +386,9 @@ class Store {
           reportSaved: response.report_saved,
           reportSavedAt: response.report_saved_at,
           recommendedActions: response.recommended_actions,
+          assumptions,
+          resolvedParams,
+          decisionEvents,
           visualization:
             response.visualization ??
             this.inferVisualizationSpec(
@@ -387,6 +418,62 @@ class Store {
       this.queries.set(id, query);
       return query;
     }
+  }
+
+  /**
+   * Собирает контекст для backend из сохраненных параметров и входного сценария.
+   * Вход: контекст текущего запуска из UI.
+   * Выход: объект с merged `previous_params`, который помогает не спрашивать лишнее.
+   */
+  private buildAnalysisContext(context: AnalysisContext): AnalysisContext {
+    const providedPreviousParams = this.isRecord(context.previous_params)
+      ? context.previous_params
+      : {};
+    const mergedPreviousParams = {
+      ...this.lastResolvedParams,
+      ...providedPreviousParams,
+    };
+
+    return {
+      ...context,
+      previous_params: mergedPreviousParams,
+    };
+  }
+
+  /**
+   * Запоминает параметры, которые можно безопасно переиспользовать в следующих вопросах.
+   * Вход: resolved_params из backend.
+   * Выход: обновленное локальное состояние контекста.
+   */
+  private captureResolvedParams(params?: Record<string, unknown>): void {
+    if (!this.isRecord(params)) {
+      return;
+    }
+
+    const nextParams = { ...this.lastResolvedParams };
+    for (const [name, value] of Object.entries(params)) {
+      if (this.isReusableResolvedParam(value)) {
+        nextParams[name] = value;
+      }
+    }
+    this.lastResolvedParams = nextParams;
+  }
+
+  /**
+   * Отбрасывает placeholder-параметры, которые backend не сможет корректно переиспользовать.
+   * Вход: один resolved parameter.
+   * Выход: `true`, если параметр имеет конкретное значение и не является маркером explicit.
+   */
+  private isReusableResolvedParam(value: unknown): value is Record<string, unknown> {
+    if (!this.isRecord(value)) {
+      return false;
+    }
+
+    return typeof value.value === "string" && value.value !== "explicit";
+  }
+
+  private isRecord(value: unknown): value is Record<string, unknown> {
+    return typeof value === "object" && value !== null && !Array.isArray(value);
   }
 
   /**
@@ -510,7 +597,7 @@ class Store {
     rows: Array<Record<string, unknown>>,
   ): boolean {
     const lowered = field.toLowerCase();
-    if (lowered.endsWith("_id") || lowered === "id") {
+    if (this.isIdentifierField(lowered) || this.isNumericDimensionField(lowered)) {
       return false;
     }
     const sample = rows.slice(0, 100).map((row) => row[field]);
@@ -548,21 +635,58 @@ class Store {
     rows: Array<Record<string, unknown>>,
   ): boolean {
     const lowered = field.toLowerCase();
-    if (lowered.endsWith("_id") || lowered === "id") {
-      return false;
-    }
     const values = rows.slice(0, 300).map((row) => row[field]).filter((v) => v != null);
-    if (values.length === 0 || !values.every((v) => typeof v === "string")) {
+    if (values.length === 0) {
       return false;
     }
     const cardinality = new Set(values as string[]).size;
-    return cardinality >= 2 && cardinality <= 20;
+    if (values.every((v) => typeof v === "string")) {
+      return cardinality >= 2 && cardinality <= 20;
+    }
+
+    if (values.every((v) => typeof v === "number" && Number.isInteger(v))) {
+      return (
+        cardinality >= 2 &&
+        cardinality <= 30 &&
+        (this.isIdentifierField(lowered) || this.isNumericDimensionField(lowered))
+      );
+    }
+
+    return false;
   }
 
   private looksTemporalQuestion(question: string): boolean {
     const q = question.toLowerCase();
-    const tokens = ["день", "месяц", "год", "недел", "динам", "тренд"];
+    const tokens = ["день", "дней", "месяц", "год", "недел", "динам", "тренд"];
     return tokens.some((token) => q.includes(token));
+  }
+
+  private isIdentifierField(loweredField: string): boolean {
+    return (
+      loweredField === "id" ||
+      loweredField.endsWith("_id") ||
+      loweredField.startsWith("id_")
+    );
+  }
+
+  private isNumericDimensionField(loweredField: string): boolean {
+    const dimensionTokens = [
+      "hour",
+      "weekday",
+      "day_of_week",
+      "day",
+      "week",
+      "month",
+      "quarter",
+      "year",
+      "час",
+      "день",
+      "недел",
+      "месяц",
+      "квартал",
+      "год",
+    ];
+    return dimensionTokens.some((token) => loweredField.includes(token));
   }
 
   getQuery(id: string): Query | undefined {

@@ -16,6 +16,19 @@ function figmaAssetResolver() {
   }
 }
 
+function vendorChunk(id: string) {
+  if (!id.includes('node_modules')) {
+    return undefined
+  }
+  if (id.includes('react-router')) {
+    return 'vendor-router'
+  }
+  if (id.includes('recharts') || id.includes('d3-') || id.includes('victory-vendor')) {
+    return 'vendor-charts'
+  }
+  return 'vendor'
+}
+
 export default defineConfig({
   plugins: [
     figmaAssetResolver(),
@@ -35,6 +48,13 @@ export default defineConfig({
       "/api": {
         target: "http://localhost:8000",
         changeOrigin: true,
+      },
+    },
+  },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: vendorChunk,
       },
     },
   },

@@ -23,6 +23,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table";
+import { Textarea } from "./ui/textarea";
 
 /**
  * Нормализует label для уровня confidence.
@@ -99,23 +100,90 @@ function getErrorPresentation(errorCode?: string) {
 }
 
 /**
+ * Безопасно читает цепочку уточнений из sessionStorage.
+ * Вход: сырое JSON-значение.
+ * Выход: массив шагов уточнения или пустой массив.
+ */
+function parseClarificationTrail(rawTrail: string | null): Array<Record<string, string>> {
+  if (!rawTrail) {
+    return [];
+  }
+
+  try {
+    const parsed = JSON.parse(rawTrail);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Превращает короткий ввод параметра в полноценный вопрос для повторного запуска.
+ * Вход: исходный вопрос, значение уточнения и имя параметра.
+ * Выход: текст запроса, который можно отправить в backend.
+ */
+function buildClarifiedQuestion(
+  baseQuestion: string,
+  rawValue: string,
+  paramName?: string,
+): string {
+  const value = rawValue.trim();
+  const base = baseQuestion.trim();
+  if (!value) {
+    return base;
+  }
+
+  const loweredValue = value.toLowerCase();
+  if (
+    loweredValue.includes(base.toLowerCase()) ||
+    /^(покажи|почему|какая|какой|где|есть ли|как\s)/i.test(value)
+  ) {
+    return value;
+  }
+
+  if (paramName === "date_range" && !/^(за|с|со|от|до|по)\b/i.test(value)) {
+    return `${base} за ${value}`;
+  }
+
+  return `${base} ${value}`;
+}
+
+/**
+ * Формирует подпись дефолта так, чтобы пользователь видел применяемое предположение.
+ * Вход: label/value из clarification payload.
+ * Выход: человекочитаемая фраза для кнопки и повторного запроса.
+ */
+function getClarificationDefaultLabel(
+  defaultLabel?: string,
+  defaultValue?: string | null,
+): string {
+  if (defaultLabel?.trim()) {
+    return defaultLabel.trim();
+  }
+
+  if (defaultValue === "last_7_days") {
+    return "последние 7 дней";
+  }
+
+  return defaultValue?.trim() ?? "";
+}
+
+/**
  * Формирует action layer для успешного ответа.
  * Вход: сохраненный Query из store.
  * Выход: список шагов для секции “Что делать дальше”.
  */
 function getResultActions(query: Query): string[] {
-  if (query.result?.recommendedActions && query.result.recommendedActions.length > 0) {
-    return query.result.recommendedActions;
-  }
-
+  const backendActions = query.result?.recommendedActions ?? [];
   if (query.result?.confidence.level === "low") {
     return [
-      "Подтвердите вывод вторым срезом или более узким фильтром перед решением.",
+      "Уточните вопрос или сузьте фильтр, если этот результат нужен для управленческого решения.",
       "Сверьте explain и SQL ниже, чтобы убедиться, что логика совпадает с вашим кейсом.",
+      ...backendActions,
     ];
   }
 
-  return [];
+  return backendActions;
 }
 
 /**
@@ -170,6 +238,7 @@ export function ResultScreen() {
   const [reportName, setReportName] = useState("");
   const [sqlOpen, setSqlOpen] = useState(false);
   const [explainOpen, setExplainOpen] = useState(false);
+  const [customClarificationValue, setCustomClarificationValue] = useState("");
 
   const query = store.getQuery(queryId!);
 
@@ -196,18 +265,37 @@ export function ResultScreen() {
    * Вход: `value` выбранной кнопки clarification.
    * Выход: обновленный trail в sessionStorage и переход на loading screen.
    */
-  const handleClarificationClick = (value: string) => {
+  const handleClarificationClick = (value: string, label?: string) => {
+    const clarifiedQuestion = buildClarifiedQuestion(
+      query.text,
+      value,
+      query.clarification?.param_name,
+    );
     const rawTrail = sessionStorage.getItem("clarificationTrail");
-    const currentTrail = rawTrail ? JSON.parse(rawTrail) : [];
+    const currentTrail = parseClarificationTrail(rawTrail);
     currentTrail.push({
       question: query.clarification?.question ?? "",
       selected_label:
-        query.clarification?.options.find((option) => option.value === value)?.label ?? "",
-      selected_value: value,
+        label ??
+        query.clarification?.options.find((option) => option.value === value)?.label ??
+        "Свое значение",
+      selected_value: clarifiedQuestion,
     });
     sessionStorage.setItem("clarificationTrail", JSON.stringify(currentTrail));
-    sessionStorage.setItem("pendingQuery", value);
+    sessionStorage.setItem("pendingQuery", clarifiedQuestion);
     navigate(`/loading/${query.id}-clarified`);
+  };
+
+  /**
+   * Возвращает пользователя к ручному редактированию без потери исходного вопроса.
+   * Вход: нет.
+   * Выход: вопрос попадает в textarea главного экрана.
+   */
+  const handleManualEdit = () => {
+    sessionStorage.setItem("draftQuery", query.text);
+    sessionStorage.removeItem("clarificationTrail");
+    sessionStorage.removeItem("pendingAskContext");
+    navigate("/");
   };
 
   /**
@@ -227,6 +315,12 @@ export function ResultScreen() {
   };
 
   if (query.needsClarification && query.clarification) {
+    const defaultClarificationLabel = getClarificationDefaultLabel(
+      query.clarification.default_label,
+      query.clarification.default_value,
+    );
+    const canUseDefault = Boolean(defaultClarificationLabel);
+
     return (
       <div className="mx-auto max-w-3xl pt-20">
         <Card className="border-blue-200 bg-gradient-to-br from-blue-50 to-white p-10">
@@ -271,7 +365,7 @@ export function ResultScreen() {
                 <button
                   key={`${option.label}-${option.value}`}
                   type="button"
-                  onClick={() => handleClarificationClick(option.value)}
+                  onClick={() => handleClarificationClick(option.value, option.label)}
                   className="rounded-2xl border border-slate-200 bg-white p-5 text-left transition hover:border-blue-400 hover:shadow-md"
                 >
                   <span className="block text-base font-semibold text-slate-950">
@@ -294,12 +388,65 @@ export function ResultScreen() {
             </Alert>
           )}
 
+          <div className="mt-5 grid gap-4">
+            {canUseDefault && (
+              <Button
+                type="button"
+                variant="outline"
+                className="h-auto min-h-10 justify-start whitespace-normal border-emerald-200 bg-emerald-50 py-3 text-left text-emerald-800 hover:bg-emerald-100"
+                onClick={() =>
+                  handleClarificationClick(
+                    defaultClarificationLabel,
+                    `Использовать дефолт: ${defaultClarificationLabel}`,
+                  )
+                }
+              >
+                Продолжить с дефолтом: {defaultClarificationLabel}
+              </Button>
+            )}
+
+            {query.clarification.allow_free_input !== false && (
+              <div className="rounded-2xl border border-slate-200 bg-white p-5">
+                <Label
+                  htmlFor="custom-clarification"
+                  className="text-sm font-semibold text-slate-900"
+                >
+                  Указать вручную
+                </Label>
+                <Textarea
+                  id="custom-clarification"
+                  value={customClarificationValue}
+                  onChange={(event) => setCustomClarificationValue(event.target.value)}
+                  placeholder={
+                    query.clarification.free_input_placeholder ||
+                    "Например: последние 14 дней"
+                  }
+                  className="mt-2 min-h-[96px] resize-none border-slate-300"
+                />
+                <div className="mt-3 flex justify-end">
+                  <Button
+                    type="button"
+                    disabled={!customClarificationValue.trim()}
+                    onClick={() =>
+                      handleClarificationClick(
+                        customClarificationValue,
+                        "Свое значение",
+                      )
+                    }
+                  >
+                    Применить
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+
           <div className="mt-8 space-y-4">
             <NextStepsCard
               title="Что делать дальше"
               actions={query.recommendedActions ?? []}
             />
-            <Button onClick={() => navigate("/")} className="w-full" variant="outline">
+            <Button onClick={handleManualEdit} className="w-full" variant="outline">
               <ArrowLeft className="mr-2 h-4 w-4" />
               Изменить вопрос вручную
             </Button>
@@ -443,10 +590,20 @@ export function ResultScreen() {
       {result.confidence.level === "low" && (
         <Alert className="mb-6 border-amber-200 bg-amber-50">
           <ShieldAlert className="h-4 w-4 text-amber-700" />
-          <AlertTitle>Низкая уверенность</AlertTitle>
+          <AlertTitle>Низкая уверенность: черновик для проверки</AlertTitle>
           <AlertDescription className="text-slate-700">
-            Используйте результат как ориентир и подтвердите вывод вторым срезом перед
-            действием.
+            Используйте результат как ориентир. Перед действием уточните вопрос, сузьте
+            фильтр или подтвердите вывод вторым срезом.
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {result.assumptions && result.assumptions.length > 0 && (
+        <Alert className="mb-6 border-emerald-200 bg-emerald-50">
+          <ShieldCheck className="h-4 w-4 text-emerald-700" />
+          <AlertTitle>Использовано предположение</AlertTitle>
+          <AlertDescription className="text-slate-700">
+            {result.assumptions.join(" ")}
           </AlertDescription>
         </Alert>
       )}

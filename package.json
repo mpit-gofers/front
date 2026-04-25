@@ -5,7 +5,12 @@
   "type": "module",
   "scripts": {
     "build": "vite build",
-    "dev": "vite"
+    "dev": "vite",
+    "test:api-contract": "node scripts/api-contract.test.mjs",
+    "test:loading-flow": "node scripts/loading-flow.test.mjs",
+    "test:home-ux": "node scripts/home-ux.test.mjs",
+    "test:build-chunks": "node scripts/build-chunks.test.mjs",
+    "test:visualization-ui": "node scripts/visualization-ui.test.mjs"
   },
   "dependencies": {
     "@emotion/react": "11.14.0",

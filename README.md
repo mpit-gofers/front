@@ -1,202 +1,231 @@
 # Drivee Decision Room Frontend
 
-Фронтенд-часть MVP веб-сервиса аналитики Drivee: интерфейс для NL2SQL-сценариев, где пользователь задает бизнес-вопрос на естественном языке, получает проверяемый SQL-ответ, визуализацию, объяснение результата, confidence-оценку и следующие действия.
+Техническая документация frontend-части Drivee NL2SQL. Приложение предоставляет SPA-интерфейс для аналитических NL2SQL-сценариев: пользователь задает бизнес-вопрос, получает controlled clarification flow, SQL, explain, confidence, визуализацию, таблицу данных и рекомендации.
 
-Приложение собрано как SPA на React + Vite и подключается к backend API Drivee NL2SQL через `/api/*`.
+Документ описывает фактическую структуру `front`, правила сопровождения, локальный запуск, интеграцию с backend, тесты и quality gates. Все команды выполняются из папки `front`, если явно не указано другое.
 
-## Что есть в интерфейсе
+## Назначение
 
-- Главный экран Decision Room с готовыми Ops/Finance-сценариями и свободным вопросом.
-- Clarification-first flow: если вопрос неоднозначный, backend возвращает варианты уточнения, а UI не показывает выдуманный результат.
-- Trust-контур результата: SQL, explain, confidence, оценка стоимости, рекомендации и таблица данных.
-- Автоматический выбор визуализации: line/bar/table-only по спецификации backend или fallback-логике UI.
-- Библиотека сохраненных отчетов внутри локального in-memory store текущей сессии.
-- Pilot KPI panel с baseline/target метриками и optional snapshot из `GET /api/pilot/kpi`.
+Frontend решает пять задач:
+
+1. Дает пользователю рабочий Decision Room вместо landing page.
+2. Отправляет NL2SQL-вопросы в backend через `POST /api/ask`.
+3. Показывает clarification screen, если backend требует уточнение.
+4. Отображает результат через trust-контур: SQL, explain, confidence, cost, actions, table, chart.
+5. Хранит историю отчетов текущей сессии в локальном store и показывает optional KPI snapshot.
 
 ## Технологический стек
 
-- React 18
-- TypeScript
-- Vite 6
-- React Router 7
-- Tailwind CSS 4
-- shadcn/Radix UI primitives
-- MUI icons, lucide-react
-- Recharts для графиков
-- Docker / Nginx для production-сборки
+- React 18.
+- TypeScript.
+- Vite 6.
+- React Router 7.
+- Tailwind CSS 4.
+- shadcn/Radix UI primitives.
+- MUI icons и lucide-react.
+- Recharts для визуализаций.
+- Docker / Nginx для production-сборки.
 
-## Структура проекта
+## Архитектура
+
+Проект остается компактным SPA, поэтому структура разделена по ответственности, а не по избыточным слоям.
 
 ```text
 front/
   src/
-    main.tsx                 # Точка входа React-приложения
+    main.tsx                       # React entrypoint
     app/
-      App.tsx                # RouterProvider
-      routes.tsx             # Маршруты SPA
-      api.ts                 # Контракты и fetch-клиент backend API
-      store.ts               # Локальное состояние запросов и отчетов
-      components/            # Экраны и UI-компоненты приложения
-      components/ui/         # UI primitives
-    styles/                  # Глобальные стили, тема, Tailwind
-  Dockerfile                 # dev/build/prod stages
-  docker-compose.yml         # Локальный dev-контейнер с Vite
-  vite.config.ts             # Vite config, aliases, proxy /api -> backend
-  package.json               # npm scripts и зависимости
+      App.tsx                      # RouterProvider
+      routes.tsx                   # Route objects
+      api.ts                       # API contracts, runtime guards, fetch client
+      store.ts                     # Local session state and preset scenarios
+      components/                  # Product screens and composed widgets
+        Home.tsx                   # Decision Room start screen
+        LoadingScreen.tsx          # Pending ask flow
+        ResultScreen.tsx           # Success, error and clarification result
+        ReportView.tsx             # Saved report details
+        ReportsLibrary.tsx         # Session report library
+        QueryVisualization.tsx     # Chart/table visualization adapter
+        ui/                        # Reusable UI primitives
+        figma/                     # Figma import compatibility helpers
+    styles/                        # Global CSS, fonts, Tailwind and theme tokens
+  scripts/                         # Node-based regression and hygiene tests
+  guidelines/                      # Figma Make implementation guidance
+  Dockerfile                       # dev/build/prod stages
+  docker-compose.yml               # Local Vite container
+  vite.config.ts                   # Plugins, aliases, /api proxy, chunks
+  package.json                     # npm scripts and dependency manifest
+  package-lock.json                # Reproducible npm dependency lock
 ```
 
-## Требования
+### Frontend Boundaries
 
-- Node.js 20+.
-- npm, поставляется вместе с Node.js.
-- Запущенный backend Drivee NL2SQL на `http://localhost:8000`, если нужен реальный ответ API.
-- Docker, если запускаете фронтенд в контейнере.
+`src/app/api.ts` is the only place that knows backend response shapes. It validates API payloads at runtime before the UI receives them.
 
-## Быстрый локальный запуск
+`src/app/store.ts` owns session state, prepared business questions and report persistence for the current browser session.
 
-Команды ниже выполняются из папки `front`.
+`src/app/components/*` owns rendering and user workflows. Components should consume typed API/store data and avoid duplicating backend payload parsing.
 
-```bash
-npm install
-npm run dev
-```
+`src/app/components/ui/*` contains reusable primitives. Product-specific behavior should live in composed components outside `ui`.
 
-После запуска откройте:
+`dist/`, `node_modules/` and local logs are generated artifacts. They are intentionally ignored and must not be committed.
 
-```text
-http://localhost:5173
-```
+## Backend Integration
 
-По умолчанию Vite проксирует все запросы `/api/*` на:
+The frontend uses relative API paths by default:
+
+- `POST /api/ask`: sends a natural-language analytics question and receives success, clarification or controlled error payload.
+- `GET /api/pilot/kpi`: optional historical KPI snapshot for the pilot panel.
+
+In local development, Vite proxies `/api/*` to:
 
 ```text
 http://localhost:8000
 ```
 
-Поэтому стандартный сценарий разработки:
-
-1. Поднять backend API на `http://localhost:8000`.
-2. Запустить фронтенд через `npm run dev`.
-3. Открыть `http://localhost:5173`.
-
-## Подключение к backend
-
-Фронтенд использует следующие endpoint'ы:
-
-- `POST /api/ask` - отправка NL2SQL-вопроса и получение результата, уточнения или контролируемой ошибки.
-- `GET /api/pilot/kpi` - optional snapshot для Pilot KPI panel.
-
-В dev-режиме можно оставить относительные `/api/*`: Vite proxy из `vite.config.ts` направит их в backend.
-
-Если backend запущен на другом адресе, задайте переменную окружения:
-
-```bash
-VITE_API_BASE_URL=http://localhost:8000 npm run dev
-```
-
-На Windows PowerShell:
+To target another backend URL:
 
 ```powershell
 $env:VITE_API_BASE_URL="http://localhost:8000"
 npm run dev
 ```
 
-Если `VITE_API_BASE_URL` не задана, frontend отправляет запросы на относительный путь `/api/...`.
+If `VITE_API_BASE_URL` is not set, requests stay relative to the current frontend origin.
 
-## Backend перед запуском frontend
+## Local Setup
 
-Минимальный backend-поток из корня репозитория:
+Install dependencies from the lockfile:
 
-```bash
-python -m venv venv
-venv\Scripts\pip install -r backend\requirements.txt
-docker compose -f backend\docker-compose.yml --env-file backend\.env up -d
-venv\Scripts\python -m backend.app.interfaces.cli.init_db_cli
-venv\Scripts\python -m backend.app.interfaces.cli.init_vanna_cli
-venv\Scripts\python -m backend.app.interfaces.http.server
+```powershell
+npm ci
 ```
 
-После этого frontend сможет обращаться к API через Vite proxy.
+Start Vite:
 
-## npm scripts
-
-```bash
+```powershell
 npm run dev
 ```
 
-Запускает Vite dev server с hot reload.
-
-```bash
-npm run build
-```
-
-Собирает production bundle в `dist/`.
-
-В проекте пока нет отдельных npm-скриптов для lint/test/typecheck.
-
-## Запуск через Docker
-
-### Development mode
-
-Команды выполняются из папки `front`.
-
-```bash
-docker compose up --build
-```
-
-Откройте:
+Open:
 
 ```text
 http://localhost:5173
 ```
 
-Контейнер запускает Vite на `0.0.0.0:5173`, монтирует текущую папку и сохраняет `node_modules` внутри контейнера.
+Typical full-stack local flow:
 
-### Production mode
+1. Start backend API on `http://localhost:8000`.
+2. Run `npm ci` in `front`.
+3. Run `npm run dev`.
+4. Open `http://localhost:5173`.
+5. Ask a prepared Ops/Finance question and verify success or clarification flow.
 
-```bash
+## npm Scripts
+
+```powershell
+npm run dev
+```
+
+Starts Vite dev server with hot reload.
+
+```powershell
+npm run build
+```
+
+Builds production assets into `dist/`.
+
+```powershell
+npm run test
+```
+
+Runs the complete review gate. This delegates to `test:all`.
+
+```powershell
+npm run test:all
+```
+
+Runs repository hygiene checks, API contract checks, UX regression checks, production build, bundle chunk budget check and visualization UI checks.
+
+Individual checks:
+
+- `npm run test:repository-hygiene`
+- `npm run test:api-contract`
+- `npm run test:loading-flow`
+- `npm run test:home-ux`
+- `npm run test:visualization-ui`
+- `npm run test:build-chunks`
+
+`test:build-chunks` expects a fresh `dist/`; `test:all` runs `npm run build` before it.
+
+## Quality Gates Перед Ревью
+
+Run from `front`:
+
+```powershell
+git status --short
+npm run test
+```
+
+Expected state:
+
+- `node_modules/`, `dist/` and Vite logs are not tracked by git.
+- `package.json` name identifies the Drivee frontend, not the original Figma import.
+- Runtime API payloads are protected by guards in `src/app/api.ts`.
+- Loading, home UX and visualization behaviors are covered by regression scripts.
+- Production bundle builds successfully.
+- JS chunks stay under the configured 500 KiB budget.
+- README and npm scripts describe the same workflow.
+
+## Docker
+
+Development container:
+
+```powershell
+docker compose up --build
+```
+
+Open:
+
+```text
+http://localhost:5173
+```
+
+Production image:
+
+```powershell
 docker build --target prod -t drivee-decision-room-front .
 docker run --rm -p 8080:80 drivee-decision-room-front
 ```
 
-Откройте:
+Open:
 
 ```text
 http://localhost:8080
 ```
 
-Production stage собирает статические файлы через Vite и отдает их Nginx.
+The production stage serves static assets through Nginx. It does not proxy `/api/*`; production deployments need an external reverse proxy or an Nginx config that routes `/api/*` to backend.
 
-## Проверка сборки
+## Manual Smoke Check
 
-Перед передачей изменений проверьте, что frontend собирается:
+After `npm run test`, check the product flow manually when backend is available:
 
-```bash
-npm run build
-```
+1. Home screen opens without layout overlap.
+2. Prepared Ops/Finance scenario starts only after explicit action.
+3. Loading screen does not claim validation is complete before backend response.
+4. Successful result shows visualization, table, SQL, explain, confidence and recommended actions.
+5. Ambiguous request opens clarification UI.
+6. Backend errors render controlled error messaging instead of a blank screen.
+7. Reports library opens saved session reports.
 
-Если backend доступен, дополнительно проверьте вручную:
+## Maintenance Rules
 
-1. Открывается главная страница.
-2. Готовый Ops/Finance-сценарий проходит через loading screen.
-3. Успешный ответ показывает таблицу, визуализацию, SQL и explain.
-4. Неоднозначный запрос открывает экран уточнения.
-5. Ошибки backend отображаются как контролируемые сообщения, а не как пустой экран.
+- Keep backend payload validation in `src/app/api.ts`.
+- Keep product workflow state in `src/app/store.ts` or a dedicated app-level module.
+- Keep reusable primitives generic under `src/app/components/ui`.
+- Do not commit generated assets, dependency folders, local logs or env files.
+- Prefer `npm ci` for clean installs and CI-like verification.
+- Add a focused script in `scripts/` for each regression-prone frontend behavior.
 
-## Частые проблемы
+## Origin
 
-### API не отвечает
-
-Проверьте, что backend запущен на `http://localhost:8000` или задана корректная `VITE_API_BASE_URL`.
-
-### На главной нет historical KPI snapshot
-
-Это допустимое состояние. Если `GET /api/pilot/kpi` недоступен или вернул невалидный payload, UI оставляет baseline/target панель и не ломает страницу.
-
-### Production-контейнер не проксирует `/api`
-
-Nginx stage в текущем `Dockerfile` отдает только статический frontend. Для production-интеграции нужен внешний reverse proxy или отдельная Nginx-конфигурация, которая направит `/api/*` в backend.
-
-## Происхождение
-
-Изначальный UI был импортирован из Figma Make, после чего адаптирован под Drivee NL2SQL MVP: добавлены контракты backend API, trust/guardrail UX, KPI panel, библиотека отчетов и Docker/Vite сценарии запуска.
+The initial interface was imported from Figma Make and then adapted for Drivee NL2SQL MVP. The current repository keeps Figma attribution files, but runtime package metadata and README describe the Drivee frontend product.

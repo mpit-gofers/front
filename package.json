@@ -1,11 +1,14 @@
 {
-  "name": "@figma/my-make-file",
+  "name": "@drivee/decision-room-front",
   "private": true,
   "version": "0.0.1",
   "type": "module",
   "scripts": {
     "build": "vite build",
     "dev": "vite",
+    "test": "npm run test:all",
+    "test:all": "npm run test:repository-hygiene && npm run test:api-contract && npm run test:loading-flow && npm run test:home-ux && npm run build && npm run test:build-chunks && npm run test:visualization-ui",
+    "test:repository-hygiene": "node scripts/repository-hygiene.test.mjs",
     "test:api-contract": "node scripts/api-contract.test.mjs",
     "test:loading-flow": "node scripts/loading-flow.test.mjs",
     "test:home-ux": "node scripts/home-ux.test.mjs",
